@@ -1,0 +1,9 @@
+{
+  "name": "Iridium", 
+  "tree": {
+    "$path": "Src"
+  },
+  "globIgnorePaths": [
+    "**/*.d.luau"
+  ]
+}

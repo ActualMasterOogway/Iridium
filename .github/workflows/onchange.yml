@@ -1,0 +1,54 @@
+name: Pushed
+
+on:
+  push:
+    paths:
+      - '**.luau'
+      - '**.lua'
+      - '**.rbxm'
+      - '**.rbxmx'
+      - '**.json'
+  pull_request:
+    paths:
+      - '**.luau'
+      - '**.lua'
+      - '**.rbxm'
+      - '**.rbxmx'
+      - '**.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Bundle Iridium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup RoKit
+        uses: CompeyDev/setup-rokit@v0.1.2
+
+      - name: Install Necessary Tools
+        run: |
+          rokit trust rojo-rbx/rojo
+          rokit trust lune-org/lune
+          rokit trust seaofvoices/darklua
+          rokit install
+
+      - name: Bundle
+        run: lune run Build bundle header=Build/Header.luau minify=true ci-mode=true
+
+      - name: Upload Minified Script to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Iridium.luau
+          path: Distribution/Iridium.luau
+
+      - name: Upload Model to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Iridium.rbxm
+          path: Distribution/Iridium.rbxm
