@@ -57,7 +57,7 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
 ## Usage
 
 ```luau
-local Iridium = require("Iridium")
+local Iridium, Types = require("Iridium"), require("Iridium/Types")
 
 -- Deserialize bytecode from a string or buffer
 local deserialized = Iridium:Deserialize(bytecodeData)
@@ -67,12 +67,12 @@ local mainFunction = deserialized.Protos[deserialized.ProtoEntryPoint]
 
 -- Inspect instructions
 for i, instruction in ipairs(mainFunction.Instructions) do
-    print(instruction.Opcode, instruction.A, instruction.B, instruction.C)
+    print(instruction.Code, instruction.A, instruction.B, instruction.C)
 end
 
 -- Access constants
 for i, constant in ipairs(mainFunction.Constants) do
-    print(constant.ClassName, constant.Value)
+    print(constant.ClassName, constant)
 end
 ```
 
