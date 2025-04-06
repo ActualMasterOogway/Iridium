@@ -1,8 +1,8 @@
 local Deserializer = require("Distribution/Iridium")
 
-local Luau, FileSystem = require("@lune/luau"), require("@lune/fs")
+local _Luau, FileSystem = require("@lune/luau"), require("@lune/fs")
 
-local ByteCode = FileSystem.readFile("Tests/Example 2.luauc") --Luau.compile(FileSystem.readFile("Tests/Example.luau"), { optimizationLevel = 2, debugLevel = 2 })
+local ByteCode = FileSystem.readFile("Tests/Example 2.luauc") --_Luau.compile(FileSystem.readFile("Tests/Example.luau"), { optimizationLevel = 2, debugLevel = 2 })
 
 local Deserialized = Deserializer:Deserialize(ByteCode)
 
@@ -90,7 +90,7 @@ local function Test()
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPIFLE or
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPXEQKS or
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPIFLT) then
-                
+                    print(instruction.Operands.D + 1)
                     local jmp = ((instruction_index) + instruction.Operands.D) + 1
                     local already_found = false
                     for _, v in stoopid_labels do
