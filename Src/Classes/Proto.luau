@@ -249,7 +249,7 @@ function Proto:RemapUserdataTypes(UserdataRemapping: { any }, UserdataTypeLimit:
 
     self.UserdataInfo = {
         TypeSize = self.TypeInfo:ReadVarInt(),
-        UpvalCount = self.TypeInfo:ReadVarInt(),
+        UpvalueCount = self.TypeInfo:ReadVarInt(),
         LocalCount = self.TypeInfo:ReadVarInt()
     }
 
@@ -270,10 +270,10 @@ function Proto:RemapUserdataTypes(UserdataRemapping: { any }, UserdataTypeLimit:
         end
     end
 
-    if self.UserdataInfo.UpvalCount ~= 0 then
-        local UpvalueBuffer = self.TypeInfo:ReadBytes(self.UserdataInfo.UpvalCount)
+    if self.UserdataInfo.UpvalueCount ~= 0 then
+        local UpvalueBuffer = self.TypeInfo:ReadBytes(self.UserdataInfo.UpvalueCount)
 
-        for i = 1, self.UserdataInfo.UpvalCount do
+        for i = 1, self.UserdataInfo.UpvalueCount do
             local ByteValue = UpvalueBuffer:readu8(false)
             local Index = ByteValue - LuauSpec.LuauBytecodeType.LBC_TYPE_TAGGED_USERDATA_BASE
 
