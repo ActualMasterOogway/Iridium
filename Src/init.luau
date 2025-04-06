@@ -128,7 +128,7 @@ end
 
 export type Deserializer = typeof(Deserializer.new(nil :: never))
 
-function Iridium:Deserialize(Bytecode: string | buffer)
+function Iridium:Deserialize(Bytecode: string | buffer | Buffer.BufferReader)
     local ByteCode: Buffer.BufferReader = Buffer.new(if typeof(Bytecode) == "buffer" then Bytecode else buffer.fromstring(Bytecode))
 
     return Deserializer.new(ByteCode)
