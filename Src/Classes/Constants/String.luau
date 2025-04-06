@@ -16,7 +16,7 @@ String.__index = String
 
 	@return String
 ]=]
-function String.new(Value: String)
+function String.new(Value: string)
 	local self = setmetatable({}, String)
 	self.ClassName = "String"
     
