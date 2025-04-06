@@ -10,7 +10,7 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
 
 - [x] Bytecode Parsing
   - [x] Support for Luau bytecode versions 3-6
-  - [x] Typed bytecode support (version 4+)
+  - [x] Typed bytecode support (version 4-6)
   - [x] Complete bytecode structure analysis
 
 - [x] Function Analysis
@@ -45,10 +45,9 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
     - [x] Version 2
     - [x] Version 3
 
-- [x] Debugging Support
-  - [x] Line information extraction
-  - [x] Debug name resolution
-  - [x] Source code mapping
+- [x] Debug Info
+  - [x] Line information
+  - [x] Debug name
 
 - [x] Utility Functions
   - [x] String reference resolution
@@ -93,4 +92,4 @@ Contributions are welcome! [Feel free to submit issues or pull requests to help 
 
 - [atrexus](https://github.com/atrexus/) - [Unluau](https://github.com/atrexus/unluau/tree/archive/) was a really helpful resource
 - [lovre](https://github.com/lovrewe/) - [Platinum](https://github.com/Lovreware/Platinum) helped me find where I was underreading/overreading
-- [GRH](https://github.com/luau-load/) - Helped me reading line information correctly ❤
+- [GRH](https://github.com/grh-official/) - Helped me reading line information correctly ❤
