@@ -76,6 +76,8 @@ for i, constant in ipairs(mainFunction.Constants) do
 end
 ```
 
+For advanced usage I'd suggest checking [this example](init.client.luau) out
+
 ## Building from Source
 
 Click [here](CONTRIBUTING.md#development-environment-setup).
