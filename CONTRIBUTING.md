@@ -19,7 +19,7 @@ Thank you for your interest in contributing to Iridium! This document provides g
    - [Git](https://git-scm.com/)
    - [RoKit](https://github.com/rojo-rbx/rokit) - Package manager for Roblox tools
 
-2. **Recommended IDE:**
+2. **Recommended IDE and Extensions:**
    - [Visual Studio Code](https://code.visualstudio.com/) with the following extensions:
      - [Luau LSP](https://marketplace.visualstudio.com/items?itemName=JohnnyMorganz.luau-lsp)
      - [Rojo](https://marketplace.visualstudio.com/items?itemName=evaera.vscode-rojo)
@@ -162,7 +162,7 @@ Iridium uses a custom documentation format based on Luau Doc:
    - Use a descriptive name (e.g., `feature/new-instruction-support` or `fix/version-detection-bug`)
 
 3. **Make Changes:**
-   - Implement your changes following the code style guidelines
+   - Implement your changes following [the code style guidelines](#code-style-guidelines)
    - Add or update tests as necessary
    - Update documentation to reflect your changes
 
