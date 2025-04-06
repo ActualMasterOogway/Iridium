@@ -65,7 +65,7 @@
 				"init.client.luau"
 			],
 			"group": {
-				"kind": "build",
+				"kind": "test",
 				"isDefault": true
 			},
 			"options": {
