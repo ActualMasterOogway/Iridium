@@ -1,7 +1,10 @@
 {
   "name": "Iridium", 
   "tree": {
-    "$path": "Src"
+    "$path": "Src",
+    "Types": {
+      "$path": "Src/Deserializer.d.luau"
+    }
   },
   "globIgnorePaths": [
     "**/*.d.luau"
