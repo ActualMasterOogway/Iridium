@@ -90,7 +90,6 @@ local function Test()
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPIFLE or
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPXEQKS or
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPIFLT) then
-                    print(instruction.Operands.D + 1)
                     local jmp = ((instruction_index) + instruction.Operands.D) + 1
                     local already_found = false
                     for _, v in stoopid_labels do
