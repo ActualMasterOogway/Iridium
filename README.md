@@ -67,7 +67,7 @@ local mainFunction = deserialized.Protos[deserialized.ProtoEntryPoint]
 
 -- Inspect instructions
 for i, instruction in ipairs(mainFunction.Instructions) do
-    print(instruction.Code, instruction.A, instruction.B, instruction.C)
+    print(instruction.Code, instruction.Operands.A, instruction.Operands.B, instruction.Operands.C)
 end
 
 -- Access constants
