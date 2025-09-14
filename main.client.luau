@@ -2,9 +2,12 @@ local Deserializer = require("Distribution/Iridium")
 
 local _Luau, FileSystem = require("@lune/luau"), require("@lune/fs")
 
-local ByteCode = FileSystem.readFile("Tests/Example 2.luauc") --_Luau.compile(FileSystem.readFile("Tests/Example.luau"), { optimizationLevel = 2, debugLevel = 2 })
+local ByteCode = FileSystem.readFile("Tests/Roblox Bytecode.luauc")
+local Comparison = FileSystem.readFile("Tests/Roblox Bytecode comparison.luauc") --_Luau.compile(FileSystem.readFile("Tests/Roblox Bytecode comparison.luau"), { optimizationLevel = 1, debugLevel = 1 })
 
-local Deserialized = Deserializer:Deserialize(ByteCode)
+local Deserialized = Deserializer:Deserialize(ByteCode, {
+    RobloxBytecode = true
+})
 
 -- https://github.com/Lovreware/Platinum/blob/main/init.luau#L26
 
@@ -69,7 +72,7 @@ local function Test()
     
         local extra_align: number = 0
         for _, instruction in Proto.Instructions do
-            local registers_string: string = `A: {instruction.Operands.A}, B: {instruction.Operands.B}, C: {instruction.Operands.C}, D: {instruction.Operands.D}, E: {instruction.Operands.E}`
+            local registers_string: string = `A: {instruction.Encodings.A}, B: {instruction.Encodings.B}, C: {instruction.Encodings.C}, D: {instruction.Encodings.D}, E: {instruction.Encodings.E}`
             if (#registers_string > extra_align) then extra_align = #registers_string end
         end
     
@@ -90,7 +93,7 @@ local function Test()
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPIFLE or
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPXEQKS or
                 instruction.OpCode.Information == Deserializer.LuauSpec.LuauOpcode.LOP_JUMPIFLT) then
-                    local jmp = ((instruction_index) + instruction.Operands.D) + 1
+                    local jmp = ((instruction_index) + instruction.Encodings.D) + 1
                     local already_found = false
                     for _, v in stoopid_labels do
                         if (v.to_index == jmp) then 
@@ -119,7 +122,7 @@ local function Test()
                 end
             end
     
-            local registers_string: string = `A: {instruction.Operands.A}, B: {instruction.Operands.B}, C: {instruction.Operands.C}, D: {instruction.Operands.D}, E: {instruction.Operands.E}`
+            local registers_string: string = `A: {instruction.Encodings.A}, B: {instruction.Encodings.B}, C: {instruction.Encodings.C}, D: {instruction.Encodings.D}, E: {instruction.Encodings.E}`
             
             WriteColor(`{if (has_jump) then LongTab else ""}{LongTab}[{instruction_index}] #{instruction_index}`, "blue")
             WriteColor(`{ShortTab}{instruction.OpCode.Information.Name}`, "yellow")

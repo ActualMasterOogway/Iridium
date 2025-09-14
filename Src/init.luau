@@ -1,3 +1,5 @@
+local Types = require(script.Types)
+
 local Buffer = require(script.Utilities.Buffer)
 
 local LuauSpec = require(script.Luau.Spec)
@@ -22,9 +24,10 @@ Deserializer.__index = Deserializer
 	The Deserializer class is used for deserializing Luau Bytecode from versions ranging between 3 and 6
 
 	@param Bytecode Buffer.BufferReader
+    @param Config DeserializerConfig
 	@return Deserializer
 ]=]
-function Deserializer.new(Bytecode: Buffer.BufferReader): Deserializer
+function Deserializer.new(Bytecode: Buffer.BufferReader, Config: Types.DeserializerConfig): Types.Deserializer
 	local self = setmetatable({}, Deserializer)
 	self.ClassName = "Deserializer"
     self.Source = Bytecode
@@ -85,7 +88,7 @@ function Deserializer.new(Bytecode: Buffer.BufferReader): Deserializer
     self.Protos = table.create(self.ProtoCount)
 
     for i = 1, self.ProtoCount do
-        self.Protos[i] = Proto.new(Bytecode, self)
+        self.Protos[i] = Proto.new(Bytecode, self, Config.EncodingKey)
     end
 
     self.ProtoEntryPoint = Bytecode:ReadVarInt() + 1
@@ -93,6 +96,16 @@ function Deserializer.new(Bytecode: Buffer.BufferReader): Deserializer
     self.Protos[self.ProtoEntryPoint].Main = true
 
     self.FunctionCount, self.Functions, self.FunctionEntryPoint = self.ProtoCount, self.Protos, self.ProtoEntryPoint
+
+    if Config.RobloxBytecode then
+        self.MagicA = Bytecode:readu32()
+        self.MagicB = Bytecode:readu32()
+        self.Hash = Bytecode:readstring(32)
+    end
+
+    if typeof(Config.PostFinish) == "function" then
+        Config.PostFinish(self)
+    end
 
     if Bytecode.LastUnreadBytes ~= 0 then
         warn(`Bytecode was not parsed properly ({Bytecode.Offset}/{Bytecode.Length})`)
@@ -126,12 +139,15 @@ function Deserializer:GetTypeMapping(Name: string, Length: number) -- TODO: Actu
     return bit32.band(string.byte(Name) - Length, 0xFF)
 end
 
-export type Deserializer = typeof(Deserializer.new(nil :: never))
+function Iridium:Deserialize(Bytecode: string | buffer | Buffer.BufferReader, Config: Types.DeserializerConfig?)
+    local DeserializerConfig = Config or {} :: Types.DeserializerConfig
+    if DeserializerConfig.RobloxBytecode and not DeserializerConfig._stop_key_overwrite_rblx then
+        DeserializerConfig.EncodingKey = 203
+    end
 
-function Iridium:Deserialize(Bytecode: string | buffer | Buffer.BufferReader)
     local ByteCode: Buffer.BufferReader = Buffer.new(if typeof(Bytecode) == "buffer" or Buffer.IsBufferReader(Bytecode) then Bytecode else buffer.fromstring(Bytecode :: string))
 
-    return Deserializer.new(ByteCode)
+    return Deserializer.new(ByteCode, DeserializerConfig)
 end
 
 return Iridium

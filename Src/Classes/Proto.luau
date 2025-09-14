@@ -31,7 +31,7 @@ Proto.__index = Proto
     @param Deserializer The deserializer
 	@return Proto
 ]=]
-function Proto.new(Bytecode: Buffer.BufferReader, Deserializer): Proto
+function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: number?): Proto
 	local self = setmetatable({}, Proto)
 	self.ClassName = "Proto"
     self.Main = false
@@ -97,7 +97,7 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer): Proto
             continue
         end
 
-        local Instruction = Instruction.new(Bytecode)
+        local Instruction = Instruction.new(Bytecode, nil, EncodingKey)
 
         if Instruction.Aux then
             self.Instructions[i + 1] = Instruction.Aux
@@ -237,7 +237,7 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer): Proto
         end
     end
 
-	return self :: Proto
+	return self
 end
 
 --[=[

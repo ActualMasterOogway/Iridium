@@ -64,7 +64,7 @@ export type Instruction = {
     },
     AuxValue: Hexadecimal?,
     Aux: Instruction?,
-    Operands: {
+    Encodings: {
         A: number,
         B: number,
         C: number,
@@ -158,8 +158,15 @@ export type Proto = {
     Upvalues: { [number]: Upvalue },
 }
 
+export type DeserializerConfig = {
+    RobloxBytecode: boolean?,
+    _stop_key_overwrite_rblx: boolean?,
+    EncodingKey: number?,
+    PostFinish: (Deserializer: Deserializer) -> ()
+}
+
 export type Deserializer = {
-    new: (Bytecode: BufferReader) -> Deserializer,
+    new: (Bytecode: BufferReader, Config: DeserializerConfig) -> Deserializer,
     ReadStringRef: (self: Deserializer) -> string?,
     GetTypeMapping: (self: Deserializer, Name: string, Length: number) -> number,
 
@@ -178,10 +185,14 @@ export type Deserializer = {
     FunctionCount: number,
     Functions: { [number]: Proto },
     FunctionEntryPoint: number,
+
+    MagicA: number?,
+    MagicB: number?,
+    Hash: string?
 }
 
 export type Iridium = {
-    Deserialize: (self: Iridium, Bytecode: string | buffer | BufferReader) -> Deserializer
+    Deserialize: (self: Iridium, Bytecode: string | buffer | BufferReader, Config: DeserializerConfig?) -> Deserializer
 }
 
 return nil

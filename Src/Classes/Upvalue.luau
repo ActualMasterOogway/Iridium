@@ -20,7 +20,7 @@ function Upvalue.new(Name: string): Upvalue
 
     self.Name = Name
 
-	return self :: Upvalue
+	return self
 end
 
 export type Upvalue = typeof(Upvalue.new(nil :: never))

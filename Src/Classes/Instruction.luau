@@ -25,17 +25,18 @@ Instruction.__index = Instruction
 	@param Bytecode Buffer.BufferReader
 	@return Instruction
 ]=]
-function Instruction.new(Bytecode: Buffer.BufferReader, Value: number?): Instruction
+function Instruction.new(Bytecode: Buffer.BufferReader, Value: number?, EncodingKey: number?): Instruction
 	local self = setmetatable({}, Instruction)
 	self.ClassName = "Instruction"
 
     -- Opcode
 
-    self.Value = Hexadecimal.new(Value or Bytecode:readu32()) :: Hexadecimal.Hexadecimal
-    self.Code = Hexadecimal.new(bit32.band(self.Value.Value, 0xFF)) :: Hexadecimal.Hexadecimal
+    local real = Value or Bytecode:readu32()
+    self.Value = Hexadecimal.new(if EncodingKey then bit32.band(real, 0xFF) * EncodingKey else real)
+    self.Code = Hexadecimal.new(bit32.band(self.Value.Value, 0xFF))
     self.OpCode = {}
 
-    assert(self.Code.Value >= 0 and self.Code.Value < LuauSpec.LuauOpcode.LOP__COUNT.Index, `Invalid opcode {self.Code.Value}`)
+    assert(self.Code.Value >= 0 and self.Code.Value < LuauSpec.LuauOpcode.LOP__COUNT.Index, `Invalid opcode {self.Code}`)
 
     for i, OpCodeInfo in LuauSpec.LuauOpcode :: { LuauSpec.OpCodeInfo } do
         if OpCodeInfo.Index == self.Code.Value then
@@ -47,18 +48,18 @@ function Instruction.new(Bytecode: Buffer.BufferReader, Value: number?): Instruc
     -- Aux
 
     if self.OpCode.Information.HasAux then
-        self.AuxValue = Hexadecimal.new(Bytecode:readu32(false)) :: Hexadecimal.Hexadecimal
+        self.AuxValue = Hexadecimal.new(Bytecode:readu32(false))
         self.Aux = Instruction.new(Bytecode, bit32.rshift(Bytecode:readu32(), 32))
     end
 
-    -- Operands
+    -- Encodings
 
-    self.Operands = {
-        A = bit32.band(bit32.rshift(self.Value.Value, 8), 0xFF),
-        B = bit32.band(bit32.rshift(self.Value.Value, 16), 0xFF),
-        C = bit32.band(bit32.rshift(self.Value.Value, 24), 0xFF),
-        D = bit32.rshift(self.Value.Value, 16),
-        E = bit32.rshift(self.Value.Value, 8)
+    self.Encodings = {
+        A = bit32.band(bit32.rshift(real, 8), 0xFF),
+        B = bit32.band(bit32.rshift(real, 16), 0xFF),
+        C = bit32.band(bit32.rshift(real, 24), 0xFF),
+        D = bit32.rshift(real, 16),
+        E = bit32.rshift(real, 8)
     }
 
     -- Context

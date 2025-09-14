@@ -1,44 +1,3 @@
-export type BufferReader = {
-	Buffer: buffer,
-	Offset: number,
-	Length: number,
-	LastUnreadBytes: number,
-	
-	tostring: (BufferReader) -> string,
-	len: (BufferReader) -> number,
-	
-	readi8: (BufferReader, shift: boolean?) -> number,
-	readu8: (BufferReader, shift: boolean?) -> number,
-	readi16: (BufferReader, shift: boolean?) -> number,
-	readu16: (BufferReader, shift: boolean?) -> number,
-	readi32: (BufferReader, shift: boolean?) -> number,
-	readu32: (BufferReader, shift: boolean?) -> number,
-	readf32: (BufferReader, shift: boolean?) -> number,
-	readf64: (BufferReader, shift: boolean?) -> number,
-	
-	writei8: (BufferReader, value: number, shift: boolean?) -> number,
-	writeu8: (BufferReader, value: number, shift: boolean?) -> number,
-	writei16: (BufferReader, value: number, shift: boolean?) -> number,
-	writeu16: (BufferReader, value: number, shift: boolean?) -> number,
-	writei32: (BufferReader, value: number, shift: boolean?) -> number,
-	writeu32: (BufferReader, value: number, shift: boolean?) -> number,
-	writef32: (BufferReader, value: number, shift: boolean?) -> number,
-	writef64: (BufferReader, value: number, shift: boolean?) -> number,
-	
-	readstring: (BufferReader, size: number, shift: boolean?) -> string,
-	writestring: (BufferReader, value: string, size: number?, shift: boolean?) -> (),
-	
-	fill: (BufferReader, value: number, count: number?) -> (),
-	
-	seek: (BufferReader, dst: number) -> (),
-	resize: (BufferReader, newSize: number) -> (), -- this is expensive
-
-	ReadVarInt: (BufferReader, shift: boolean?) -> number,
-	ReadString: (BufferReader, length: number?, shift: boolean?) -> string,
-	ReadBoolean: (BufferReader, shift: boolean?) -> boolean,
-	ReadBytes: (BufferReader, size: number, shift: boolean?) -> BufferReader
-}
-
 local BufferWrapper = {}
 
 function BufferWrapper.new(Buffer: number | string | buffer | BufferReader): BufferReader
@@ -61,7 +20,7 @@ function BufferWrapper.new(Buffer: number | string | buffer | BufferReader): Buf
 	-- all functions are proxies to the buffer lib basically, and moves the offset
 	-- except seek
 	
-	function BufferReader:seek(dst: number)
+	function BufferReader.seek(self: BufferReader, dst: number)
 		-- seek should move the offset add/sub dst
 		self.Offset += dst
 		self.LastUnreadBytes -= dst
@@ -175,84 +134,68 @@ function BufferWrapper.new(Buffer: number | string | buffer | BufferReader): Buf
 		end
 	end
 	
-	function BufferReader:writei8(value: number, shift: boolean?): number
-		local dat = buffer.writei8(self.Buffer, self.Offset, value)
+	function BufferReader:writei8(value: number, shift: boolean?)
+		buffer.writei8(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(1)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writeu8(value: number, shift: boolean?): number
-		local dat = buffer.writeu8(self.Buffer, self.Offset, value)
+	function BufferReader:writeu8(value: number, shift: boolean?)
+		buffer.writeu8(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(1)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writei16(value: number, shift: boolean?): number
-		local dat = buffer.writei16(self.Buffer, self.Offset, value)
+	function BufferReader:writei16(value: number, shift: boolean?)
+		buffer.writei16(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(2)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writeu16(value: number, shift: boolean?): number
-		local dat = buffer.writeu16(self.Buffer, self.Offset, value)
+	function BufferReader:writeu16(value: number, shift: boolean?)
+		buffer.writeu16(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(2)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writei32(value: number, shift: boolean?): number
-		local dat = buffer.writei32(self.Buffer, self.Offset, value)
+	function BufferReader:writei32(value: number, shift: boolean?)
+		buffer.writei32(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(4)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writeu32(value: number, shift: boolean?): number
-		local dat = buffer.writeu32(self.Buffer, self.Offset, value)
+	function BufferReader:writeu32(value: number, shift: boolean?)
+		buffer.writeu32(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(4)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writef32(value: number, shift: boolean?): number
-		local dat = buffer.writef32(self.Buffer, self.Offset, value)
+	function BufferReader:writef32(value: number, shift: boolean?)
+		buffer.writef32(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(4)
 		end
-
-		return dat
 	end
 	
-	function BufferReader:writef64(value: number, shift: boolean?): number
-		local dat = buffer.writef64(self.Buffer, self.Offset, value)
+	function BufferReader:writef64(value: number, shift: boolean?)
+		buffer.writef64(self.Buffer, self.Offset, value)
 
 		if shift ~= false then
 			self:seek(8)
 		end
-
-		return dat
 	end
 
 	function BufferReader:copy(source: BufferReader | buffer, sourceOffset: number?, count: number?, shift: boolean?)
@@ -325,5 +268,7 @@ end
 function BufferWrapper.IsBufferReader(BufferReader: any)
 	return tostring(BufferReader):sub(1, 16) == "BufferReader: 0x"
 end
+
+export type BufferReader = typeof(BufferWrapper.new(0))
 
 return BufferWrapper

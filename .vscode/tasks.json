@@ -62,7 +62,7 @@
 				"&&",
 				"lune",
 				"run",
-				"init.client.luau"
+				"main.client.luau"
 			],
 			"group": {
 				"kind": "test",
