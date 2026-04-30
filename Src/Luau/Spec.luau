@@ -365,16 +365,24 @@ local LuauOpcode = {
     -- C: constant table index (0..255)
     LOP_IDIVK = { Index = 82, Name = "IDIVK", HasAux = false },
 
+    -- Atom-based userdata field access acceleration
+    -- Equivalent to GETTABLEKS/SETTABLEKS/NAMECALL but tailored towards userdata field accesses
+    LOP_GETUDATAKS = { Index = 83, Name = "GETUDATAKS", HasAux = true },
+    LOP_SETUDATAKS = { Index = 84, Name = "SETUDATAKS", HasAux = true },
+    LOP_NAMECALLUDATA = { Index = 85, Name = "NAMECALLUDATA", HasAux = true },
+
     -- Enum entry for number of opcodes, not a valid opcode by itself!
-    LOP__COUNT = { Index = 83, Name = "_COUNT", HasAux = false },
+    LOP__COUNT = { Index = 86, Name = "_COUNT", HasAux = false },
 }
 
 local LuauBytecodeTag = {
     LBC_VERSION_MIN = 3,
-    LBC_VERSION_MAX = 6,
+    LBC_VERSION_MAX = 9,
+    LBC_VERSION_TARGET = 6,
 
     LBC_TYPE_VERSION_MIN = 1,
     LBC_TYPE_VERSION_MAX = 3,
+    LBC_TYPE_VERSION_TARGET = 3,
 }
 
 local LuauBytecodeConstants = {
@@ -386,6 +394,8 @@ local LuauBytecodeConstants = {
     LBC_CONSTANT_TABLE = 5,
     LBC_CONSTANT_CLOSURE = 6,
     LBC_CONSTANT_VECTOR = 7,
+    LBC_CONSTANT_TABLE_WITH_CONSTANTS = 8,
+    LBC_CONSTANT_INTEGER = 9,
 }
 
 local LuauBytecodeType = {
@@ -399,6 +409,7 @@ local LuauBytecodeType = {
     LBC_TYPE_USERDATA = 7,
     LBC_TYPE_VECTOR = 8,
     LBC_TYPE_BUFFER = 9,
+    LBC_TYPE_INTEGER = 10,
 
     LBC_TYPE_ANY = 15,
 
@@ -543,12 +554,63 @@ local LuauBuiltinFunction = {
 
     -- math.lerp
     LBF_MATH_LERP = 89,
+
+    -- vector.lerp
+    LBF_VECTOR_LERP = 90,
+
+    -- math float classification
+    LBF_MATH_ISNAN = 91,
+    LBF_MATH_ISINF = 92,
+    LBF_MATH_ISFINITE = 93,
+
+    -- integer (64-bit signed)
+    LBF_INTEGER_CREATE = 94,
+    LBF_INTEGER_TONUMBER = 95,
+    LBF_INTEGER_NEG = 96,
+    LBF_INTEGER_ADD = 97,
+    LBF_INTEGER_SUB = 98,
+    LBF_INTEGER_MUL = 99,
+    LBF_INTEGER_DIV = 100,
+    LBF_INTEGER_MIN = 101,
+    LBF_INTEGER_MAX = 102,
+    LBF_INTEGER_REM = 103,
+    LBF_INTEGER_IDIV = 104,
+    LBF_INTEGER_UDIV = 105,
+    LBF_INTEGER_UREM = 106,
+    LBF_INTEGER_MOD = 107,
+    LBF_INTEGER_CLAMP = 108,
+    LBF_INTEGER_BAND = 109,
+    LBF_INTEGER_BOR = 110,
+    LBF_INTEGER_BNOT = 111,
+    LBF_INTEGER_BXOR = 112,
+    LBF_INTEGER_LT = 113,
+    LBF_INTEGER_LE = 114,
+    LBF_INTEGER_ULT = 115,
+    LBF_INTEGER_ULE = 116,
+    LBF_INTEGER_GT = 117,
+    LBF_INTEGER_GE = 118,
+    LBF_INTEGER_UGT = 119,
+    LBF_INTEGER_UGE = 120,
+    LBF_INTEGER_LSHIFT = 121,
+    LBF_INTEGER_RSHIFT = 122,
+    LBF_INTEGER_ARSHIFT = 123,
+    LBF_INTEGER_LROTATE = 124,
+    LBF_INTEGER_RROTATE = 125,
+    LBF_INTEGER_EXTRACT = 126,
+    LBF_INTEGER_BTEST = 127,
+    LBF_INTEGER_COUNTRZ = 128,
+    LBF_INTEGER_COUNTLZ = 129,
+    LBF_INTEGER_BSWAP = 130,
+
+    -- buffer.read/writei64 (variable-length 64-bit integer)
+    LBF_BUFFER_READINTEGER = 131,
+    LBF_BUFFER_WRITEINTEGER = 132,
 }
 
 local LuauCaptureType = {
     LCT_VAL = 0,
-    LCT_REF = 2,
-    LCT_UPVAL = 3,
+    LCT_REF = 1,
+    LCT_UPVAL = 2,
 }
 
 local LuauProtoFlag = {
@@ -560,12 +622,39 @@ local LuauProtoFlag = {
     LPF_NATIVE_FUNCTION = bit32.lshift(1, 2),
 }
 
+-- Reverse maps: enum value -> short name. Used by consumers to resolve raw
+-- byte fields (CAPTURE.A capture-type, FASTCALL*.A builtin id, etc.) without
+-- iterating the forward enum every time.
+
+local LuauBuiltinFunctionByIndex: { [number]: string } = {}
+
+for Name, Index in LuauBuiltinFunction do
+    LuauBuiltinFunctionByIndex[Index] = (Name :: string):gsub("^LBF_", "")
+end
+
+local LuauCaptureTypeByIndex: { [number]: string } = {}
+
+for Name, Index in LuauCaptureType do
+    LuauCaptureTypeByIndex[Index] = (Name :: string):gsub("^LCT_", "")
+end
+
+local LuauOpcodeByIndex: { [number]: OpCodeInfo } = {}
+
+for Name, Info in LuauOpcode do
+    if Name ~= "LOP__COUNT" then
+        LuauOpcodeByIndex[Info.Index] = Info
+    end
+end
+
 return {
     LuauOpcode = table.freeze(LuauOpcode),
+    LuauOpcodeByIndex = table.freeze(LuauOpcodeByIndex),
     LuauBytecodeTag = table.freeze(LuauBytecodeTag),
     LuauBytecodeConstants = table.freeze(LuauBytecodeConstants),
     LuauBytecodeType = table.freeze(LuauBytecodeType),
     LuauBuiltinFunction = table.freeze(LuauBuiltinFunction),
+    LuauBuiltinFunctionByIndex = table.freeze(LuauBuiltinFunctionByIndex),
     LuauCaptureType = table.freeze(LuauCaptureType),
+    LuauCaptureTypeByIndex = table.freeze(LuauCaptureTypeByIndex),
     LuauProtoFlag = table.freeze(LuauProtoFlag)
 }

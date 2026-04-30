@@ -33,11 +33,11 @@ local stdio = require("@lune/stdio")
 local roblox = require("@lune/roblox")
 local process = require("@lune/process")
 
-local LuneUtils = require("Lib/Libraries/LuneUtils")
-local BundleModel = require("Lib/BundleModel")
+local LuneUtils = require("@self/Lib/Libraries/LuneUtils")
+local BundleModel = require("@self/Lib/BundleModel")
 
-local Version = require("Lib/Data/Version")
-local DefaultDarkluaConfig = require("Lib/Data/DefaultDarkluaConfig")
+local Version = require("@self/Lib/Data/Version")
+local DefaultDarkluaConfig = require("@self/Lib/Data/DefaultDarkluaConfig")
 
 local Log = LuneUtils.Log
 local StringUtils = LuneUtils.StringUtils
@@ -424,7 +424,107 @@ elseif Subcommand == "bundle" then
         MoveFile(ModelOutputFileName, `{TempDirBase}/{OutputFileNameWithoutExtension}.rbxm`) -- Move rbxm
     end
 
-    local BundleSuccess, CodegenOutputOrError, FailedCompilations = pcall(BundleModel, ModelRoot, EnvName, Minify, ExtraOffsetLines, Verbose)
+    -- Parse .luaurc aliases and the Rojo project tree to feed alias resolution
+    -- into the bundled runtime require helper. Without this, source files that
+    -- use `require("@root/...")` aliases would error at runtime. Mirrors how
+    -- upstream Luau (CLI/src/Analyze.cpp::readConfigRec) walks parent dirs and
+    -- merges .luaurc files, with the closest config winning per alias name.
+    local ResolvedAliases = {}
+    local PathOverrides = {}
+    do
+        local function NormalizePath(p: string): string
+            local s = p:gsub("\\", "/")
+            if string.sub(s, 1, 2) == "./" then s = string.sub(s, 3) end
+            while #s > 1 and string.sub(s, -1) == "/" do s = string.sub(s, 1, -2) end
+            return s
+        end
+
+        -- Lune's serde.decode("json", ...) is strict; .luaurc tolerates
+        -- trailing commas and // comments per Luau's lenient parser. Strip
+        -- both before handing to the strict parser.
+        local function ParseLenientJson(text: string)
+            text = text:gsub("/%*.-%*/", "")
+            text = text:gsub("//[^\n]*", "")
+            text = text:gsub(",(%s*[%]}])", "%1")
+            return pcall(serde.decode, "json" :: "json", text)
+        end
+
+        local function DirOf(p: string): string?
+            local LastSlash = string.find(p, "/[^/]*$")
+            if not LastSlash then
+                return nil
+            end
+            return string.sub(p, 1, LastSlash - 1)
+        end
+
+        -- Walk parent directories from `startDir` upward, collecting .luaurc
+        -- aliases with closer files overriding farther ones. Mirrors upstream
+        -- merge order (closest wins).
+        local function CollectAliases(startDir: string): { [string]: string }
+            local Collected: { [string]: string } = {}
+            local CurrentDir: string? = startDir
+            while CurrentDir ~= nil do
+                local CandidatePath = CurrentDir .. "/.luaurc"
+                if fs.isFile(CandidatePath) then
+                    local Ok, Parsed = ParseLenientJson(fs.readFile(CandidatePath))
+                    if Ok and type(Parsed) == "table" and type(Parsed.aliases) == "table" then
+                        for AliasName, AliasValue in Parsed.aliases do
+                            if Collected[AliasName] == nil and type(AliasValue) == "string" then
+                                Collected[AliasName] = AliasValue
+                            end
+                        end
+                    end
+                end
+                CurrentDir = DirOf(CurrentDir)
+            end
+            return Collected
+        end
+
+        if InputType == ".project.json" then
+            local ProjectOk, ProjectConfig = ParseLenientJson(fs.readFile(Input))
+            if ProjectOk and type(ProjectConfig) == "table" and type(ProjectConfig.tree) == "table" then
+                local Cwd = process.cwd
+                while string.sub(Cwd, -1) == "/" or string.sub(Cwd, -1) == "\\" do
+                    Cwd = string.sub(Cwd, 1, -2)
+                end
+
+                local Aliases = CollectAliases(Cwd)
+
+                local PathMap = {}
+                local function Walk(node, treePath: string)
+                    if type(node) ~= "table" then return end
+                    if type(node["$path"]) == "string" then
+                        PathMap[NormalizePath(node["$path"])] = treePath
+                    end
+                    for childName, childNode in node do
+                        if type(childName) == "string" and string.sub(childName, 1, 1) ~= "$" then
+                            Walk(childNode, treePath .. "/" .. childName)
+                        end
+                    end
+                end
+
+                local RootName = ProjectConfig.name or "Root"
+                Walk(ProjectConfig.tree, RootName)
+
+                for AliasName, AliasPath in Aliases do
+                    local Normalized = NormalizePath(AliasPath)
+                    local TreePath = PathMap[Normalized]
+                    if TreePath then
+                        ResolvedAliases[AliasName] = { Source = Normalized, Tree = TreePath }
+                        RunIfVerbose(Log.Info, `Resolved alias @{AliasName} → {TreePath}`)
+                    end
+                end
+
+                for sourcePath, treePath in PathMap do
+                    if string.match(sourcePath, "%.luau?$") then
+                        PathOverrides[sourcePath] = treePath
+                    end
+                end
+            end
+        end
+    end
+
+    local BundleSuccess, CodegenOutputOrError, FailedCompilations = pcall(BundleModel, ModelRoot, EnvName, Minify, ExtraOffsetLines, Verbose, ResolvedAliases, PathOverrides)
 
     if not BundleSuccess then
         BadExit(`Error during BundleModel() process: {CodegenOutputOrError}`)

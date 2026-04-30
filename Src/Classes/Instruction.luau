@@ -1,13 +1,6 @@
-local Buffer = require(script.Parent.Parent.Utilities.Buffer)
+local LuauSpec = require("@root/Luau/Spec")
 
-local LuauSpec = require(script.Parent.Parent.Luau.Spec)
-
-local Hexadecimal = require(script.Parent.Hexadecimal)
-
-export type Context = {
-    LineDefined: number,
-    Pc: number
-}
+local Hexadecimal = require("@root/Classes/Hexadecimal")
 
 --[=[
 	@class Instruction
@@ -15,63 +8,60 @@ export type Context = {
 	The Instruction class is used to lift a luau instruction
 ]=]
 local Instruction = {}
+Instruction.__type = "Instruction"
 Instruction.__index = Instruction
+
+function Instruction.__eq(a, b): boolean
+	return a.Pc == b.Pc and a.Value.Value == b.Value.Value
+end
 
 --[=[
 	@within Instruction
 
-	The Instruction class is used to lift a luau instruction
+	Build an Instruction from a raw 32-bit instruction word. The encoding key,
+	if any, is applied to the low byte before opcode lookup. AuxRaw populates
+	`AuxValue` for opcodes whose `OpCodeInfo.HasAux` is true; pass nil otherwise.
 
-	@param Bytecode Buffer.BufferReader
+	@param raw The raw 32-bit instruction word
+	@param EncodingKey Optional opcode encoding key
+	@param AuxRaw Optional aux 32-bit word
+	@param Pc Program counter (1-based, bytecode-aligned including aux slots)
+	@param LineDefined Source line number (0 if no line info)
 	@return Instruction
 ]=]
-function Instruction.new(Bytecode: Buffer.BufferReader, Value: number?, EncodingKey: number?): Instruction
+function Instruction.fromRaw(raw: number, EncodingKey: number?, AuxRaw: number?, Pc: number, LineDefined: number): Instruction
 	local self = setmetatable({}, Instruction)
-	self.ClassName = "Instruction"
 
-    -- Opcode
+    local Value = if EncodingKey then bit32.bor(bit32.band(raw, 0xFFFFFF00), bit32.band(bit32.band(raw, 0xFF) * EncodingKey, 0xFF)) else raw
 
-    local real = Value or Bytecode:readu32()
-    self.Value = Hexadecimal.new(if EncodingKey then bit32.band(real, 0xFF) * EncodingKey else real)
-    self.Code = Hexadecimal.new(bit32.band(self.Value.Value, 0xFF))
-    self.OpCode = {}
+    self.Value = Hexadecimal.new(Value)
+    self.Code = Hexadecimal.new(bit32.band(Value, 0xFF))
 
-    assert(self.Code.Value >= 0 and self.Code.Value < LuauSpec.LuauOpcode.LOP__COUNT.Index, `Invalid opcode {self.Code}`)
+    local Info = LuauSpec.LuauOpcodeByIndex[self.Code.Value]
+    assert(Info, `Invalid opcode {self.Code}`)
+    self.OpCodeInfo = Info
 
-    for i, OpCodeInfo in LuauSpec.LuauOpcode :: { LuauSpec.OpCodeInfo } do
-        if OpCodeInfo.Index == self.Code.Value then
-            self.OpCode.Information = OpCodeInfo
-            break
-        end
+    if AuxRaw then
+        self.AuxValue = Hexadecimal.new(AuxRaw)
     end
 
-    -- Aux
+    -- Encodings (D and E are signed per upstream Bytecode.h LUAU_INSN_D/E macros)
 
-    if self.OpCode.Information.HasAux then
-        self.AuxValue = Hexadecimal.new(Bytecode:readu32(false))
-        self.Aux = Instruction.new(Bytecode, bit32.rshift(Bytecode:readu32(), 32))
-    end
+    local D = bit32.rshift(Value, 16)
+    local E = bit32.rshift(Value, 8)
 
-    -- Encodings
+    self.A = bit32.band(bit32.rshift(Value, 8), 0xFF)
+    self.B = bit32.band(bit32.rshift(Value, 16), 0xFF)
+    self.C = bit32.band(bit32.rshift(Value, 24), 0xFF)
+    self.D = if D >= 0x8000 then D - 0x10000 else D
+    self.E = if E >= 0x800000 then E - 0x1000000 else E
 
-    self.Encodings = {
-        A = bit32.band(bit32.rshift(real, 8), 0xFF),
-        B = bit32.band(bit32.rshift(real, 16), 0xFF),
-        C = bit32.band(bit32.rshift(real, 24), 0xFF),
-        D = bit32.rshift(real, 16),
-        E = bit32.rshift(real, 8)
-    }
-
-    -- Context
-
-    self.Context = {
-        LineDefined = 0,
-        Pc = 0
-    }
+    self.Pc = Pc
+    self.LineDefined = LineDefined
 
 	return self
 end
 
-export type Instruction = typeof(Instruction.new(nil :: never))
+export type Instruction = typeof(Instruction.fromRaw(0, nil, nil, 0, 0))
 
 return Instruction

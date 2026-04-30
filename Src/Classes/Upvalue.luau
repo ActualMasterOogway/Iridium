@@ -4,6 +4,7 @@
 	The Upvalue class is used to lift a luau Upvalue
 ]=]
 local Upvalue = {}
+Upvalue.__type = "Upvalue"
 Upvalue.__index = Upvalue
 
 --[=[
@@ -16,7 +17,6 @@ Upvalue.__index = Upvalue
 ]=]
 function Upvalue.new(Name: string): Upvalue
 	local self = setmetatable({}, Upvalue)
-	self.ClassName = "Upvalue"
 
     self.Name = Name
 

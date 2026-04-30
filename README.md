@@ -1,17 +1,18 @@
 # Iridium - Luau Bytecode Deserializer
 
-Iridium is a powerful Luau bytecode deserializer and disassembler written in Luau itself. It allows you to analyze, inspect, and understand compiled Luau bytecode by breaking it down into its constituent components.
+Iridium is a Luau bytecode deserializer and disassembler written in Luau. It takes compiled bytecode and gives you back the protos, instructions, constants, and type info as plain Luau values you can read directly.
 
 ## Description
 
-Iridium provides a comprehensive toolkit for working with Luau bytecode. It can parse bytecode from various Luau versions (3-6) and extract detailed information about functions, constants, instructions, and more. This makes it an invaluable tool for reverse engineering, debugging, and understanding how Luau code is executed at a low level.
+Iridium parses Luau bytecode versions 3 through 9, including Roblox-flavoured blobs with their MAC-envelope trailer. You get structured access to the proto tree, constant pools, the instruction stream (operands and AUX words included), and the type-info section. Use it for reverse engineering, compiler work, or any tool that needs to read bytecode below the source level.
 
 ## Features
 
 - [x] Bytecode Parsing
-  - [x] Support for Luau bytecode versions 3-6
-  - [x] Typed bytecode support (version 4-6)
-  - [x] Complete bytecode structure analysis
+  - [x] Support for Luau bytecode versions 3-9
+  - [x] Typed bytecode support (typesversion 1-3)
+  - [x] Encoding-key recovery for opcode-shuffled bytecode
+  - [x] Roblox bytecode envelope detection (v0 and v1 trailer formats)
 
 - [x] Function Analysis
   - [x] Function prototype extraction
@@ -19,26 +20,30 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
   - [x] Parameter count detection
   - [x] Upvalue tracking
   - [x] Vararg function detection
+  - [x] Native-compilation flag inspection
 
 - [x] Instruction Decoding
   - [x] Complete instruction set support
   - [x] Opcode identification
-  - [x] Operand extraction
-  - [x] Instruction flow analysis
+  - [x] Operand extraction (A/B/C/D/E, signed where appropriate)
+  - [x] AUX-word handling and instruction flow analysis
+  - [x] Lazy decoding via a packed `Instructions` container
 
 - [x] Constant Pool Management
-  - [x] String constants
-  - [x] Number constants
-  - [x] Boolean constants
-  - [x] Table constants
-  - [x] Vector constants
   - [x] Nil constants
-  - [x] Closure constants
+  - [x] Boolean constants
+  - [x] Number constants
+  - [x] String constants
   - [x] Import constants
+  - [x] Table constants
+  - [x] Closure constants
+  - [x] Vector constants
+  - [x] TableWithConstants constants
+  - [x] Integer constants
 
-- [ ] Type System
+- [x] Type System
   - [x] Type version detection
-  - [ ] Userdata type mapping
+  - [x] Userdata type mapping
   - [x] Type flags parsing
   - [x] Type data parsing
     - [x] Version 1
@@ -47,7 +52,8 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
 
 - [x] Debug Info
   - [x] Line information
-  - [x] Debug name
+  - [x] Local-variable scopes
+  - [x] Debug names
 
 - [x] Utility Functions
   - [x] String reference resolution
@@ -59,24 +65,30 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
 ```luau
 local Iridium, Types = require("Iridium"), require("Iridium/Types")
 
--- Deserialize bytecode from a string or buffer
+-- Deserialize bytecode from a string, buffer, or BufferReader
 local deserialized = Iridium:Deserialize(bytecodeData)
 
 -- Access function information
 local mainFunction = deserialized.Protos[deserialized.ProtoEntryPoint]
 
--- Inspect instructions
-for i, instruction in ipairs(mainFunction.Instructions) do
-    print(instruction.Code, instruction.Encodings.A, instruction.Encodings.B, instruction.Encodings.C)
+-- Inspect instructions (Instructions implements __iter / __index / __len,
+-- so iteration and indexing work like a 1-indexed array)
+for pc, instruction in mainFunction.Instructions do
+    print(pc, instruction.OpCodeInfo.Name, instruction.A, instruction.B, instruction.C)
 end
 
 -- Access constants
-for i, constant in ipairs(mainFunction.Constants) do
-    print(constant.ClassName, constant)
+for i, constant in mainFunction.Constants do
+    print(constant.__type, constant)
+end
+
+-- Roblox bytecode envelope (when present)
+if deserialized.HasRobloxEnvelope then
+    print("Roblox trailer v" .. deserialized.RobloxTrailerVersion)
 end
 ```
 
-For advanced usage I'd suggest checking [this example](init.client.luau) out
+For advanced usage I'd suggest checking [this example](main.client.luau) out
 
 ## Building from Source
 

@@ -1,4 +1,4 @@
-local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
+local LuauSpec = require("@root/Luau/Spec")
 
 --[=[
 	@class Boolean
@@ -6,8 +6,14 @@ local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
 	The Boolean class is used to lift a constant type with the LBC_CONSTANT_BOOLEAN id (1)
 ]=]
 local Boolean = {}
+Boolean.__type = "Boolean"
 Boolean.__constant_type = LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_BOOLEAN
 Boolean.__index = Boolean
+
+local True = setmetatable({ Value = true }, Boolean)
+local False = setmetatable({ Value = false }, Boolean)
+table.freeze(True)
+table.freeze(False)
 
 --[=[
 	@within Boolean
@@ -17,12 +23,7 @@ Boolean.__index = Boolean
 	@return Boolean
 ]=]
 function Boolean.new(State: boolean)
-	local self = setmetatable({}, Boolean)
-	self.ClassName = "Boolean"
-    
-    self.Value = State
-
-	return self
+	return if State then True else False
 end
 
 --[=[

@@ -1,4 +1,4 @@
-local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
+local LuauSpec = require("@root/Luau/Spec")
 
 --[=[
 	@class Vector
@@ -6,6 +6,7 @@ local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
 	The Vector class is used to lift a constant type with the LBC_CONSTANT_VECTOR id (7)
 ]=]
 local Vector = {}
+Vector.__type = "Vector"
 Vector.__constant_type = LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_VECTOR
 Vector.__index = Vector
 
@@ -18,7 +19,6 @@ Vector.__index = Vector
 ]=]
 function Vector.new(X: number, Y: number, Z: number, W: number)
 	local self = setmetatable({}, Vector)
-	self.ClassName = "Vector"
     
     self.X = X
     self.Y = Y
@@ -33,8 +33,13 @@ end
 
 ]=]
 function Vector:__tostring()
-    return `Vector({self.x}, {self.y}, {self.z}, {self.w})`
+    if self.Display then
+        return self.Display
+    end
 
+    self.Display = `Vector({self.X}, {self.Y}, {self.Z}, {self.W})`
+
+    return self.Display
 end
 
 export type Vector = typeof(Vector.new(nil :: never))

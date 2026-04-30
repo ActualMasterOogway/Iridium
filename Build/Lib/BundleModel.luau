@@ -3,18 +3,18 @@
 local luau = require("@lune/luau")
 local roblox = require("@lune/roblox")
 
-local LuneUtils = require("Libraries/LuneUtils")
+local LuneUtils = require("./Libraries/LuneUtils")
 
 local Log = LuneUtils.Log
 local StringUtils = LuneUtils.StringUtils
 
-local LuaEncode = require("Libraries/LuaEncode")
+local LuaEncode = require("./Libraries/LuaEncode")
 
-local Version = require("Data/Version")
+local Version = require("./Data/Version")
 
 -- Init script template for codegen (in this, we'll maintain 5.1 *syntax* compat
 -- for optional compilation to vanilla Lua 5.1x bytecode format)
-local InitScriptTemplate = require("Data/Template")
+local InitScriptTemplate = require("./Data/Template")
 
 -- The line where the 1st closure's function will start in bundled codegen
 local InitialLineOffset = 8
@@ -29,11 +29,13 @@ local ClassNameIdKeys = {
 
 -- Building codegen directly from model data (from .rbxm/.rbxmx) or a deserialized
 -- object using Lune's `roblox` library
-local function BundleModel(modelData: string | {roblox.Instance}, envName: string?, minifyCodegen: boolean?, extraLinesToOffset: number?, verbose: boolean?): (string, number)
+local function BundleModel(modelData: string | {roblox.Instance}, envName: string?, minifyCodegen: boolean?, extraLinesToOffset: number?, verbose: boolean?, aliases: {[string]: { Source: string, Tree: string }}?, pathOverrides: {[string]: string}?): (string, number)
     local EnvName = envName or "WaxRuntime"
     local MinifyCodegen = if minifyCodegen == nil then true else minifyCodegen
     local ExtraLinesToOffset = extraLinesToOffset or 0
     local Verbose = if verbose == nil then true else verbose
+    local Aliases = aliases or {}
+    local PathOverridesArg = pathOverrides or {}
 
     -- Same as in Wax CLI
     local function RunIfVerbose(f, ...)
@@ -211,12 +213,17 @@ local function BundleModel(modelData: string | {roblox.Instance}, envName: strin
             Prettify = Prettify,
         })
 
+    local SerializedAliases = LuaEncode(Aliases, { Prettify = Prettify })
+    local SerializedPathOverrides = LuaEncode(PathOverridesArg, { Prettify = Prettify })
+
     local CodegenOutput = StringUtils.Replace(InitScriptTemplate, {
         Version = StringUtils.SerializeStringData(Version),
         EnvName = StringUtils.SerializeStringData(EnvName),
         ObjectTree = SerializedObjectTree,
         ClosureBindings = SerializedClosureBindings,
         LineOffsets = SerializedLineOffsets,
+        WaxAliases = SerializedAliases,
+        WaxPathOverrides = SerializedPathOverrides,
     })
 
     -- If there's a top-level init modulescript, we'll return it from the output's closure directly

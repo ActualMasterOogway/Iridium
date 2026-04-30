@@ -1,4 +1,4 @@
-local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
+local LuauSpec = require("@root/Luau/Spec")
 
 --[=[
 	@class Nil
@@ -6,8 +6,12 @@ local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
 	The Nil class is used to lift a constant type with the LBC_CONSTANT_NIL id (0)
 ]=]
 local Nil = {}
+Nil.__type = "Nil"
 Nil.__constant_type = LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_NIL
 Nil.__index = Nil
+
+local Singleton = setmetatable({}, Nil)
+table.freeze(Singleton)
 
 --[=[
 	@within Nil
@@ -17,12 +21,7 @@ Nil.__index = Nil
 	@return Nil
 ]=]
 function Nil.new()
-	local self = setmetatable({}, Nil)
-	self.ClassName = "Nil"
-    
-    self.Value = nil
-
-	return self
+	return Singleton
 end
 
 --[=[

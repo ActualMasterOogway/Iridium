@@ -1,4 +1,4 @@
-local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
+local LuauSpec = require("@root/Luau/Spec")
 
 --[=[
 	@class String
@@ -6,6 +6,7 @@ local LuauSpec = require(script.Parent.Parent.Parent.Luau.Spec)
 	The String class is used to lift a constant type with the LBC_CONSTANT_STRING id (3)
 ]=]
 local String = {}
+String.__type = "String"
 String.__constant_type = LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_STRING
 String.__index = String
 
@@ -18,9 +19,8 @@ String.__index = String
 ]=]
 function String.new(Value: string)
 	local self = setmetatable({}, String)
-	self.ClassName = "String"
-    
-    self.Value = Value
+
+    self.Value = buffer.fromstring(Value)
 
 	return self
 end
@@ -30,7 +30,20 @@ end
 
 ]=]
 function String:__tostring()
-    return `"{self.Value}"`
+    if self.Display then
+        return self.Display
+    end
+
+    local Length = buffer.len(self.Value)
+    local Output = buffer.create(Length + 2)
+
+    buffer.writeu8(Output, 0, 34)
+    buffer.copy(Output, 1, self.Value)
+    buffer.writeu8(Output, Length + 1, 34)
+
+    self.Display = buffer.tostring(Output)
+
+    return self.Display
 end
 
 export type String = typeof(String.new(nil :: never))
