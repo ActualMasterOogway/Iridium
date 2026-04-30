@@ -36,9 +36,9 @@ Iridium provides a comprehensive toolkit for working with Luau bytecode. It can 
   - [x] Closure constants
   - [x] Import constants
 
-- [ ] Type System
+- [x] Type System
   - [x] Type version detection
-  - [ ] Userdata type mapping
+  - [x] Userdata type mapping
   - [x] Type flags parsing
   - [x] Type data parsing
     - [x] Version 1
@@ -67,12 +67,12 @@ local mainFunction = deserialized.Protos[deserialized.ProtoEntryPoint]
 
 -- Inspect instructions
 for i, instruction in ipairs(mainFunction.Instructions) do
-    print(instruction.Code, instruction.Encodings.A, instruction.Encodings.B, instruction.Encodings.C)
+    print(instruction.Code, instruction.A, instruction.B, instruction.C)
 end
 
 -- Access constants
 for i, constant in ipairs(mainFunction.Constants) do
-    print(constant.ClassName, constant)
+    print(constant.__type, constant)
 end
 ```
 

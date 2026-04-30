@@ -20,6 +20,12 @@ local LineOffsets = ${LineOffsets}
 local WaxVersion = "${Version}"
 local EnvName = "${EnvName}"
 
+-- .luaurc alias map (alias name -> { Source = filesystem path, Tree = tree path })
+-- and explicit per-file path overrides (filesystem path -> tree path) sourced
+-- from the Rojo project file. Empty when no aliases were configured.
+local WaxAliases = ${WaxAliases}
+local WaxPathOverrides = ${WaxPathOverrides}
+
 -- ++++++++ RUNTIME IMPL BELOW ++++++++ --
 
 -- Localizing certain libraries and built-ins for runtime efficiency
@@ -35,6 +41,7 @@ local coroutine_wrap = coroutine.wrap
 local string_sub = string.sub
 local string_match = string.match
 local string_gmatch = string.gmatch
+local string_find = string.find
 
 -- The Lune runtime has its own `task` impl, but it must be imported by its builtin
 -- module path, "@lune/task"
@@ -451,56 +458,97 @@ function ImportGlobals(refId)
             end
 
             return LoadScript(module)
-        elseif ModuleArgType == "string" and string_sub(module, 1, 1) ~= "@" then
-            -- The control flow on this SUCKS
-
+        elseif ModuleArgType == "string" then
             if #module == 0 then
                 error("Attempted to call require with empty string", 2)
             end
 
-            local CurrentRefPointer = ScriptRef
+            local FirstChar = string_sub(module, 1, 1)
 
-            if string_sub(module, 1, 1) == "/" then
-                CurrentRefPointer = RealObjectRoot
-            elseif string_sub(module, 1, 2) == "./" then
-                module = string_sub(module, 3)
-            end
+            if FirstChar == "@" then
+                -- .luaurc-style alias resolution against the bundled tree.
+                local AliasEnd = string_find(module, "/", 2, true) or (#module + 1)
+                local AliasName = string_sub(module, 2, AliasEnd - 1)
+                local AliasInfo = WaxAliases[AliasName]
 
-            local PreviousPathMatch
-            for PathMatch in string_gmatch(module, "([^/]*)/?") do
-                local RealIndex = PathMatch
-                if PathMatch == ".." then
-                    RealIndex = "Parent"
-                end
+                if AliasInfo then
+                    local SubPath = string_sub(module, AliasEnd + 1)
+                    local FullSource = if #SubPath > 0 then AliasInfo.Source .. "/" .. SubPath else AliasInfo.Source
 
-                -- Don't advance dir if it's just another "/" either
-                if RealIndex ~= "" then
-                    local ResultRef = CurrentRefPointer:FindFirstChild(RealIndex)
-                    if not ResultRef then
-                        local CurrentRefParent = CurrentRefPointer.Parent
-                        if CurrentRefParent then
-                            ResultRef = CurrentRefParent:FindFirstChild(RealIndex)
+                    local TreePath = WaxPathOverrides[FullSource]
+                        or WaxPathOverrides[FullSource .. ".luau"]
+                        or WaxPathOverrides[FullSource .. ".lua"]
+
+                    if not TreePath then
+                        TreePath = if #SubPath > 0 then AliasInfo.Tree .. "/" .. SubPath else AliasInfo.Tree
+                    end
+
+                    local CurrentRefPointer = RealObjectRoot
+                    for PathMatch in string_gmatch(TreePath, "([^/]*)/?") do
+                        if PathMatch ~= "" then
+                            local Next = CurrentRefPointer:FindFirstChild(PathMatch)
+                            if Next then
+                                CurrentRefPointer = Next
+                            end
                         end
                     end
 
-                    if ResultRef then
-                        CurrentRefPointer = ResultRef
-                    elseif PathMatch ~= PreviousPathMatch and PathMatch ~= "init" and PathMatch ~= "init.server" and PathMatch ~= "init.client" then
-                        error("Virtual script path \"" .. module .. "\" not found", 2)
+                    if CurrentRefPointer ~= RealObjectRoot and CurrentRefPointer.ClassName == "ModuleScript" then
+                        if CurrentRefPointer == ScriptRef then
+                            error(ErrorSelfRequire, 2)
+                        end
+                        return LoadScript(CurrentRefPointer)
                     end
                 end
 
-                -- For possible checks next cycle
-                PreviousPathMatch = PathMatch
-            end
+                -- Unknown alias or unresolved path → fall through to real require
+                -- (e.g. "@lune/task" is intentionally handled by the host runtime).
+            else
+                -- The control flow on this SUCKS
+                local CurrentRefPointer = ScriptRef
 
-            if CurrentRefPointer.ClassName ~= "ModuleScript" then
-                error(ErrorNonModuleScript, 2)
-            elseif CurrentRefPointer == ScriptRef then
-                error(ErrorSelfRequire, 2)
-            end
+                if FirstChar == "/" then
+                    CurrentRefPointer = RealObjectRoot
+                elseif string_sub(module, 1, 2) == "./" then
+                    module = string_sub(module, 3)
+                end
 
-            return LoadScript(CurrentRefPointer)
+                local PreviousPathMatch
+                for PathMatch in string_gmatch(module, "([^/]*)/?") do
+                    local RealIndex = PathMatch
+                    if PathMatch == ".." then
+                        RealIndex = "Parent"
+                    end
+
+                    -- Don't advance dir if it's just another "/" either
+                    if RealIndex ~= "" then
+                        local ResultRef = CurrentRefPointer:FindFirstChild(RealIndex)
+                        if not ResultRef then
+                            local CurrentRefParent = CurrentRefPointer.Parent
+                            if CurrentRefParent then
+                                ResultRef = CurrentRefParent:FindFirstChild(RealIndex)
+                            end
+                        end
+
+                        if ResultRef then
+                            CurrentRefPointer = ResultRef
+                        elseif PathMatch ~= PreviousPathMatch and PathMatch ~= "init" and PathMatch ~= "init.server" and PathMatch ~= "init.client" then
+                            error("Virtual script path \"" .. module .. "\" not found", 2)
+                        end
+                    end
+
+                    -- For possible checks next cycle
+                    PreviousPathMatch = PathMatch
+                end
+
+                if CurrentRefPointer.ClassName ~= "ModuleScript" then
+                    error(ErrorNonModuleScript, 2)
+                elseif CurrentRefPointer == ScriptRef then
+                    error(ErrorSelfRequire, 2)
+                end
+
+                return LoadScript(CurrentRefPointer)
+            end
         end
 
         return RealCall(require, module, ...)

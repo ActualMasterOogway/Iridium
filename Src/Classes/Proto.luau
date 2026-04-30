@@ -1,18 +1,21 @@
-local Buffer = require(script.Parent.Parent.Utilities.Buffer)
+local Buffer = require("@root/Utilities/Buffer")
 
-local LuauSpec = require(script.Parent.Parent.Luau.Spec)
+local LuauSpec = require("@root/Luau/Spec")
+local TypeInfo = require("@root/Luau/TypeInfo")
 
-local Instruction, Upvalue = require(script.Parent.Instruction), require(script.Parent.Upvalue)
+local Instructions, Upvalue = require("@root/Classes/Instructions"), require("@root/Classes/Upvalue")
 
-local Nil, Boolean, Number, String, Import, Table, Closure, Vector = 
-    require(script.Parent.Constants.Nil), 
-    require(script.Parent.Constants.Boolean), 
-    require(script.Parent.Constants.Number), 
-    require(script.Parent.Constants.String), 
-    require(script.Parent.Constants.Import), 
-    require(script.Parent.Constants.Table), 
-    require(script.Parent.Constants.Closure), 
-    require(script.Parent.Constants.Vector)
+local Nil, Boolean, Number, String, Import, Table, Closure, Vector, TableWithConstants, Integer =
+    require("@root/Classes/Constants/Nil"),
+    require("@root/Classes/Constants/Boolean"),
+    require("@root/Classes/Constants/Number"),
+    require("@root/Classes/Constants/String"),
+    require("@root/Classes/Constants/Import"),
+    require("@root/Classes/Constants/Table"),
+    require("@root/Classes/Constants/Closure"),
+    require("@root/Classes/Constants/Vector"),
+    require("@root/Classes/Constants/TableWithConstants"),
+    require("@root/Classes/Constants/Integer")
 
 --[=[
 	@class Proto
@@ -20,6 +23,7 @@ local Nil, Boolean, Number, String, Import, Table, Closure, Vector =
 	The Proto class is used to lift a function
 ]=]
 local Proto = {}
+Proto.__type = "Proto"
 Proto.__index = Proto
 
 --[=[
@@ -33,7 +37,6 @@ Proto.__index = Proto
 ]=]
 function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: number?): Proto
 	local self = setmetatable({}, Proto)
-	self.ClassName = "Proto"
     self.Main = false
 
     -- Function Header
@@ -44,6 +47,17 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
     self.IsVararg = Bytecode:readu8() == 1
 
     -- Types
+    --
+    -- v1 layout (bytes): [LBC_TYPE_FUNCTION][numparams][param-types]
+    -- v2/v3 layout: VarInt funcSize, VarInt upvalsCount, VarInt localsCount,
+    --               followed by funcSize bytes of v1-style signature,
+    --               then upvalsCount type bytes,
+    --               then localsCount [type, reg, startpc varint, span varint] entries.
+    -- v3 additionally resolves tagged-userdata bytes against Deserializer.UserdataNames.
+
+    self.FunctionType = nil :: TypeInfo.FunctionTypeInfo?
+    self.UpvalueTypes = {} :: { TypeInfo.ParsedType }
+    self.LocalTypes = {} :: { TypeInfo.ParsedLocal }
 
     if Deserializer.IsTyped then
         self.Flags = Bytecode:readu8()
@@ -52,34 +66,24 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
 
         if self.TypeSize > 0 then
             local TypesData = Bytecode:ReadBytes(self.TypeSize)
+            local UserdataNames = Deserializer.UserdataNames
 
             if Deserializer.TypesVersion == 1 then
                 assert(self.TypeSize == 2 + self.ParameterCount, "Type size mismatch")
-                assert(TypesData:readu8() == LuauSpec.LuauBytecodeType.LBC_TYPE_FUNCTION, "Invalid function type")
-                assert(TypesData:readu8() == self.ParameterCount, "Parameter count mismatch")
 
-                local HeaderSize = self.TypeSize > 127 and 4 or 3
-                
-                self.SizeTypeInfo = HeaderSize + self.TypeSize
-                self.TypeInfo = Buffer.new(buffer.create(self.SizeTypeInfo))
-                
-                if HeaderSize == 4 then
-                    self.TypeInfo:writeu8(bit32.bor(bit32.band(self.TypeSize, 127), bit32.lshift(1, 7)))
-                    self.TypeInfo:writeu8(bit32.rshift(self.TypeSize, 7))
-                else
-                    self.TypeInfo:writeu8(self.TypeSize)
-                end
-
-                self.TypeInfo:seek(2)
-
-                self.TypeInfo:copy(TypesData, 0)
+                self.FunctionType = TypeInfo.ParseFunctionSignature(TypesData, UserdataNames)
             elseif Deserializer.TypesVersion == 2 or Deserializer.TypesVersion == 3 then
-                self.TypeInfo = TypesData
-                self.SizeTypeInfo = self.TypeSize
+                local FuncSize = TypesData:ReadVarInt()
+                local UpvalsCount = TypesData:ReadVarInt()
+                local LocalsCount = TypesData:ReadVarInt()
 
-                if Deserializer.TypesVersion == 3 then
-                    self:RemapUserdataTypes(Deserializer.UserdataRemapping, Deserializer.UserdataTypeLimit)
+                if FuncSize > 0 then
+                    local FuncBytes = TypesData:ReadBytes(FuncSize)
+                    self.FunctionType = TypeInfo.ParseFunctionSignature(FuncBytes, UserdataNames)
                 end
+
+                self.UpvalueTypes = TypeInfo.ParseUpvalueTypes(TypesData, UpvalsCount, UserdataNames)
+                self.LocalTypes = TypeInfo.ParseLocalTypes(TypesData, LocalsCount, UserdataNames)
             end
         end
     end
@@ -87,25 +91,7 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
     -- Instructions
 
     self.InstructionCount = Bytecode:ReadVarInt()
-    self.Instructions = table.create(self.InstructionCount)
-
-    local SkipAuxInstruction = false
-
-    for i = 1, self.InstructionCount do
-        if SkipAuxInstruction then
-            SkipAuxInstruction = false
-            continue
-        end
-
-        local Instruction = Instruction.new(Bytecode, nil, EncodingKey)
-
-        if Instruction.Aux then
-            self.Instructions[i + 1] = Instruction.Aux
-            SkipAuxInstruction = true
-        end
-
-        self.Instructions[i] = Instruction
-    end
+    self.Instructions = Instructions.new(Bytecode, self.InstructionCount, EncodingKey)
 
     -- Constants
 
@@ -122,7 +108,13 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
         elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_NUMBER) then
             self.Constants[ConstantIndex] = Number.new(Bytecode:readf64())
         elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_STRING) then
-            self.Constants[ConstantIndex] = String.new(Deserializer.Strings[Bytecode:ReadVarInt()])
+            local StringIndex = Bytecode:ReadVarInt()
+            local Wrapper = Deserializer.StringConstants[StringIndex]
+            if not Wrapper then
+                Wrapper = String.new(Deserializer.Strings[StringIndex])
+                Deserializer.StringConstants[StringIndex] = Wrapper
+            end
+            self.Constants[ConstantIndex] = Wrapper
         elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_IMPORT) then
             local ImportID = Bytecode:readu32()
             local Count = bit32.rshift(ImportID, 30)
@@ -146,11 +138,37 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
 
             self.Constants[ConstantIndex] = Table.new(Keys)
         elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_CLOSURE) then
-            self.Constants[ConstantIndex] = Closure.new(Bytecode:ReadVarInt())
+            local ClosureIndex = Bytecode:ReadVarInt()
+            local Wrapper = Deserializer.ClosureConstants[ClosureIndex]
+            if not Wrapper then
+                Wrapper = Closure.new(ClosureIndex)
+                Deserializer.ClosureConstants[ClosureIndex] = Wrapper
+            end
+            self.Constants[ConstantIndex] = Wrapper
         elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_VECTOR) then
-            local x, y, z, w = 
-                Bytecode:readf64(), Bytecode:readf64(), Bytecode:readf64(), Bytecode:readf64()
+            local x, y, z, w =
+                Bytecode:readf32(), Bytecode:readf32(), Bytecode:readf32(), Bytecode:readf32()
             self.Constants[ConstantIndex] = Vector.new(x, y, z, w)
+        elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_TABLE_WITH_CONSTANTS) then
+            local KeyCount = Bytecode:ReadVarInt()
+            local Pairs: { TableWithConstants.Pair } = table.create(KeyCount)
+
+            for PairIndex = 1, KeyCount do
+                local Key = Bytecode:ReadVarInt()
+                local ConstantIdx = Bytecode:readi32()
+
+                Pairs[PairIndex] = {
+                    Key = self.Constants[Key + 1],
+                    Value = if ConstantIdx >= 0 then self.Constants[ConstantIdx + 1] else nil
+                }
+            end
+
+            self.Constants[ConstantIndex] = TableWithConstants.new(Pairs)
+        elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_INTEGER) then
+            local IsNegative = Bytecode:ReadBoolean()
+            local Magnitude = Bytecode:ReadVarInt64()
+
+            self.Constants[ConstantIndex] = Integer.new(Magnitude, IsNegative)
         else
             error(`Unexpected constant kind ({ConstantType})`)
         end
@@ -200,12 +218,13 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
             AbsLineInfo[i] = LastLine
         end
 
-        for Pc, Instruction in self.Instructions do
-            Instruction.Context.LineDefined = AbsLineInfo[bit32.rshift(Pc - 1, LineGapLog2) + 1] + LineInfo[Pc]
-            Instruction.Context.Pc = Pc
+        local LineDefinedArr = table.create(self.InstructionCount)
+        for Pc = 1, self.InstructionCount do
+            LineDefinedArr[Pc] = AbsLineInfo[bit32.rshift(Pc - 1, LineGapLog2) + 1] + LineInfo[Pc]
         end
+        self.Instructions:SetLineInfo(LineDefinedArr)
 
-        self.LastLineDefined = self.Instructions[self.InstructionCount].Context.LineDefined
+        self.LastLineDefined = LineDefinedArr[self.InstructionCount]
     end
 
     -- Debug Information
@@ -239,72 +258,6 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
 
 	return self
 end
-
---[=[
-	@within Proto
-
-]=]
-function Proto:RemapUserdataTypes(UserdataRemapping: { any }, UserdataTypeLimit: number)
-    -- https://github.com/luau-lang/luau/blob/master/VM/src/lvmload.cpp#L188
-
-    self.UserdataInfo = {
-        TypeSize = self.TypeInfo:ReadVarInt(),
-        UpvalueCount = self.TypeInfo:ReadVarInt(),
-        LocalCount = self.TypeInfo:ReadVarInt()
-    }
-
-    if self.UserdataInfo.TypeSize ~= 0 then
-        local TypesBuffer = self.TypeInfo:ReadBytes(self.UserdataInfo.TypeSize)
-
-        TypesBuffer:seek(2)
-
-        for i = 1, self.UserdataInfo.TypeSize - 2 do
-            local ByteValue = TypesBuffer:readu8(false)
-            local Index = ByteValue - LuauSpec.LuauBytecodeType.LBC_TYPE_TAGGED_USERDATA_BASE
-
-            if Index >= 0 and Index < UserdataTypeLimit then
-                TypesBuffer:writeu8(UserdataRemapping[Index + 1], false)
-            end
-
-            TypesBuffer:seek(1)
-        end
-    end
-
-    if self.UserdataInfo.UpvalueCount ~= 0 then
-        local UpvalueBuffer = self.TypeInfo:ReadBytes(self.UserdataInfo.UpvalueCount)
-
-        for i = 1, self.UserdataInfo.UpvalueCount do
-            local ByteValue = UpvalueBuffer:readu8(false)
-            local Index = ByteValue - LuauSpec.LuauBytecodeType.LBC_TYPE_TAGGED_USERDATA_BASE
-
-            if Index >= 0 and Index < UserdataTypeLimit then
-                UpvalueBuffer:writeu8(UserdataRemapping[Index + 1], false)
-            end
-
-            UpvalueBuffer:seek(1)
-        end
-    end
-
-    if self.UserdataInfo.LocalCount ~= 0 then
-        for i = 1, self.UserdataInfo.LocalCount do
-            local ByteValue = self.TypeInfo:readu8(false)
-            local Index = ByteValue - LuauSpec.LuauBytecodeType.LBC_TYPE_TAGGED_USERDATA_BASE
-
-            if Index >= 0 and Index < UserdataTypeLimit then
-                self.TypeInfo:writeu8(UserdataRemapping[Index + 1], false)
-            end
-
-            self.TypeInfo:seek(2)
-
-            local _VarInt1, _VarInt2 = self.TypeInfo:ReadVarInt(), self.TypeInfo:ReadVarInt()
-        end
-    end
-
-    if self.TypeInfo.LastUnreadBytes ~= 0 then
-        warn(`Userdata types was not parsed properly ({self.TypeInfo.Offset}/{self.TypeInfo.Length})`)
-    end
-end
-
 
 export type Proto = typeof(Proto.new(nil :: never))
 

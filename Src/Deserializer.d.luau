@@ -1,80 +1,116 @@
 export type Upvalue = {
-    ClassName: "Upvalue",
+    __type: "Upvalue",
     Name: string
 }
 
 export type VectorConstant = {
-    ClassName: "Vector",
+    __type: "Vector",
     X: number,
     Y: number,
     Z: number,
-    W: number
+    W: number,
+    Display: string?
 }
 
 export type TableConstant = {
-    ClassName: "Table",
-    Value: { [number]: any }
+    __type: "Table",
+    Value: { [number]: Constant },
+    Display: string?
 }
 
 export type StringConstant = {
-    ClassName: "String",
-    Value: string
+    __type: "String",
+    Value: buffer,
+    Display: string?
 }
 
 export type NumberConstant = {
-    ClassName: "Number",
-    Value: number
+    __type: "Number",
+    Value: number,
+    Display: string?
 }
 
 export type NilConstant = {
-    ClassName: "Nil",
+    __type: "Nil",
     Value: nil
 }
 
 export type ImportConstant = {
-    ClassName: "Import",
-    Value: { [number]: StringConstant }
+    __type: "Import",
+    Value: { [number]: StringConstant },
+    Display: string?
 }
 
 export type ClosureConstant = {
-    ClassName: "Closure",
-    Value: number
+    __type: "Closure",
+    Value: number,
+    Display: string?
 }
 
 export type BooleanConstant = {
-    ClassName: "Boolean",
+    __type: "Boolean",
     Value: boolean
 }
 
-export type Constant = BooleanConstant | ClosureConstant | ImportConstant | NilConstant | NumberConstant | StringConstant | TableConstant | VectorConstant
+export type IntegerConstant = {
+    __type: "Integer",
+    Value: number,
+    IsNegative: boolean,
+    Display: string?
+}
+
+export type TableWithConstantsPair = {
+    Key: Constant,
+    Value: Constant?
+}
+
+export type TableWithConstantsConstant = {
+    __type: "TableWithConstants",
+    Value: { [number]: TableWithConstantsPair },
+    Display: string?
+}
+
+export type Constant =
+    BooleanConstant
+    | ClosureConstant
+    | ImportConstant
+    | NilConstant
+    | NumberConstant
+    | StringConstant
+    | TableConstant
+    | VectorConstant
+    | TableWithConstantsConstant
+    | IntegerConstant
 
 export type Hexadecimal = {
-    ClassName: "Hexadecimal",
+    __type: "Hexadecimal",
     Value: number
 }
 
 export type Instruction = {
-    ClassName: "Instruction",
+    __type: "Instruction",
     Value: Hexadecimal,
     Code: Hexadecimal,
-    OpCode: {
+    OpCodeInfo: {
         Index: number,
         Name: string,
         HasAux: boolean
     },
     AuxValue: Hexadecimal?,
-    Aux: Instruction?,
-    Encodings: {
-        A: number,
-        B: number,
-        C: number,
-        D: number,
-        E: number
-    },
-    Context: {
-        LineDefined: number,
-        Pc: number
-    }
+    A: number,
+    B: number,
+    C: number,
+    D: number,
+    E: number,
+    LineDefined: number,
+    Pc: number
+}
+
+export type Instructions = {
+    __type: "Instructions",
+    Count: number,
+    [number]: Instruction,
+    SetLineInfo: (Instructions, { number }) -> ()
 }
 
 export type BufferReader = {
@@ -113,29 +149,50 @@ export type BufferReader = {
 	resize: (BufferReader, newSize: number) -> (),
 
 	ReadVarInt: (BufferReader, shift: boolean?) -> number,
+	ReadVarInt64: (BufferReader, shift: boolean?) -> number,
 	ReadString: (BufferReader, length: number?, shift: boolean?) -> string,
 	ReadBoolean: (BufferReader, shift: boolean?) -> boolean,
 	ReadBytes: (BufferReader, size: number, shift: boolean?) -> BufferReader
 }
 
+export type ParsedType = {
+    Byte: number,
+    Tag: number,
+    IsOptional: boolean,
+    Name: string,
+    UserdataName: string?
+}
+
+export type ParsedLocalType = {
+    Byte: number,
+    Tag: number,
+    IsOptional: boolean,
+    Name: string,
+    UserdataName: string?,
+    Register: number,
+    StartPc: number,
+    EndPc: number
+}
+
+export type FunctionTypeInfo = {
+    NumParams: number,
+    ParameterTypes: { ParsedType }
+}
+
 export type Proto = {
-    ClassName: "Proto",
+    __type: "Proto",
     Main: boolean,
     MaxStackSize: number,
     ParameterCount: number,
     UpvalueCount: number,
-    IsVararg: number,
+    IsVararg: boolean,
     Flags: number?,
     TypeSize: number?,
-    SizeTypeInfo: number?,
-    TypeInfo: BufferReader?,
-    UserdataInfo: {
-        TypeSize: number,
-        UpvalueCount: number,
-        LocalCount: number
-    },
+    FunctionType: FunctionTypeInfo?,
+    UpvalueTypes: { ParsedType },
+    LocalTypes: { ParsedLocalType },
     InstructionCount: number,
-    Instructions: { [number]: Instruction },
+    Instructions: Instructions,
     ConstantCount: number,
     Constants: { [number]: Constant },
     ProtoCount: number,
@@ -159,18 +216,15 @@ export type Proto = {
 }
 
 export type DeserializerConfig = {
-    RobloxBytecode: boolean?,
-    _stop_key_overwrite_rblx: boolean?,
     EncodingKey: number?,
-    PostFinish: (Deserializer: Deserializer) -> ()
+    PostFinish: (Deserializer: Deserializer) -> ()?
 }
 
 export type Deserializer = {
     new: (Bytecode: BufferReader, Config: DeserializerConfig) -> Deserializer,
     ReadStringRef: (self: Deserializer) -> string?,
-    GetTypeMapping: (self: Deserializer, Name: string, Length: number) -> number,
 
-    ClassName: "Deserializer",
+    __type: "Deserializer",
     Source: BufferReader,
     BytecodeVersion: number,
     IsTyped: boolean,
@@ -178,7 +232,7 @@ export type Deserializer = {
     StringCount: number,
     Strings: { [number]: string },
     UserdataTypeLimit: number,
-    UserdataRemapping: { [number]: number },
+    UserdataNames: { [number]: string },
     ProtoCount: number,
     Protos: { [number]: Proto },
     ProtoEntryPoint: number,
@@ -186,9 +240,14 @@ export type Deserializer = {
     Functions: { [number]: Proto },
     FunctionEntryPoint: number,
 
+    HasRobloxEnvelope: boolean,
+    RobloxTrailerVersion: number?,
+    RobloxTrailerSize: number?,
+
     MagicA: number?,
     MagicB: number?,
-    Hash: string?
+    Hash: string?,
+    Trailer: string?
 }
 
 export type Iridium = {

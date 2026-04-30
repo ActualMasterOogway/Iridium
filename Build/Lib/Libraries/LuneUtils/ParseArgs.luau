@@ -5,7 +5,7 @@ type OptionsOutput = {[string]: string | number | boolean | nil}
 
 local process = require("@lune/process")
 
-local Log = require("Log")
+local Log = require("./Log")
 
 local function ParseArgs(args: {string}, optionsTable: OptionsInput, usageMessage: string?): OptionsOutput
     local function ErrorExit()

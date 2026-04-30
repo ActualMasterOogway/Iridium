@@ -4,6 +4,7 @@
 	The Hexadecimal class is used to represent an integer as a Hexadecimal
 ]=]
 local Hexadecimal = {}
+Hexadecimal.__type = "Hexadecimal"
 Hexadecimal.__index = Hexadecimal
 
 --[=[
@@ -15,7 +16,6 @@ Hexadecimal.__index = Hexadecimal
 ]=]
 function Hexadecimal.new(Number: number): Hexadecimal
 	local self = setmetatable({}, Hexadecimal)
-	self.ClassName = "Hexadecimal"
     
     self.Value = Number
 
@@ -27,7 +27,13 @@ end
 
 ]=]
 function Hexadecimal:__tostring()
-    return ("0x%X"):format(self.Value)
+    if self.Display then
+        return self.Display
+    end
+
+    self.Display = ("0x%X"):format(self.Value)
+
+    return self.Display
 end
 
 export type Hexadecimal = typeof(Hexadecimal.new(nil :: never))

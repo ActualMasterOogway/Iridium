@@ -7,7 +7,7 @@ local CommandUtils = {}
 function CommandUtils.CommandExists(binary: string): boolean
     if process.os ~= "windows" then
         -- Unix-compliance is simple!
-        return process.spawn("type", {binary}, {shell = true}).ok -- Return from status code directly
+        return process.exec("type", {binary}, {shell = true}).ok -- Return from status code directly
     end
 
     -- I hate Windows

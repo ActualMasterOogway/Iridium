@@ -105,6 +105,7 @@ Example:
 	Description of what this class does
 ]=]
 local MyClass = {}
+MyClass.__type = "MyClass"
 MyClass.__index = MyClass
 
 --[=[
@@ -117,7 +118,6 @@ MyClass.__index = MyClass
 ]=]
 function MyClass.new(Param1: string): MyClass
 	local self = setmetatable({}, MyClass)
-	self.ClassName = "MyClass"
     self.Property = Param1
 
 	return self
