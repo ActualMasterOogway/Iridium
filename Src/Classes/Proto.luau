@@ -5,7 +5,7 @@ local TypeInfo = require("@root/Luau/TypeInfo")
 
 local Instructions, Upvalue = require("@root/Classes/Instructions"), require("@root/Classes/Upvalue")
 
-local Nil, Boolean, Number, String, Import, Table, Closure, Vector, TableWithConstants, Integer =
+local Nil, Boolean, Number, String, Import, Table, Closure, Vector, TableWithConstants, Integer, ClassShape =
     require("@root/Classes/Constants/Nil"),
     require("@root/Classes/Constants/Boolean"),
     require("@root/Classes/Constants/Number"),
@@ -15,7 +15,8 @@ local Nil, Boolean, Number, String, Import, Table, Closure, Vector, TableWithCon
     require("@root/Classes/Constants/Closure"),
     require("@root/Classes/Constants/Vector"),
     require("@root/Classes/Constants/TableWithConstants"),
-    require("@root/Classes/Constants/Integer")
+    require("@root/Classes/Constants/Integer"),
+    require("@root/Classes/Constants/ClassShape")
 
 --[=[
 	@class Proto
@@ -169,6 +170,25 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
             local Magnitude = Bytecode:ReadVarInt64()
 
             self.Constants[ConstantIndex] = Integer.new(Magnitude, IsNegative)
+        elseif (ConstantType == LuauSpec.LuauBytecodeConstants.LBC_CONSTANT_CLASS_SHAPE) then
+            -- ClassName, then the property names, then the method names. Each
+            -- entry is an index into this proto's own constant table pointing
+            -- at a String constant (so all referenced constants precede this one).
+            local ClassName = self.Constants[Bytecode:ReadVarInt() + 1]
+            local PropertyCount = Bytecode:ReadVarInt()
+            local MethodCount = Bytecode:ReadVarInt()
+
+            local Properties: { any } = table.create(PropertyCount)
+            for PropertyIndex = 1, PropertyCount do
+                Properties[PropertyIndex] = self.Constants[Bytecode:ReadVarInt() + 1]
+            end
+
+            local Methods: { any } = table.create(MethodCount)
+            for MethodIndex = 1, MethodCount do
+                Methods[MethodIndex] = self.Constants[Bytecode:ReadVarInt() + 1]
+            end
+
+            self.Constants[ConstantIndex] = ClassShape.new(ClassName, Properties, Methods)
         else
             error(`Unexpected constant kind ({ConstantType})`)
         end
@@ -182,7 +202,9 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
     for i = 1, self.ProtoCount do
         local fid = Bytecode:ReadVarInt()
 
-        self.Protos[i] = Deserializer.Protos[fid]
+        -- Child proto ids are 0-based on the wire; Deserializer.Protos is 1-based
+        -- (mirrors the +1 applied to the entry-point id in the deserializer).
+        self.Protos[i] = Deserializer.Protos[fid + 1]
     end
 
     -- Proto Extra Information
@@ -253,6 +275,27 @@ function Proto.new(Bytecode: Buffer.BufferReader, Deserializer, EncodingKey: num
 
         for i = 1, self.DebugUpvalueCount do
             self.Upvalues[i] = Upvalue.new(Deserializer:ReadStringRef())
+        end
+    end
+
+    -- Call Feedback Vector (bytecode v11+)
+    --
+    -- Per-proto runtime profiling slots: each records the Pc of a CALLFB
+    -- instruction so the VM can specialise hot call targets. SlotType is
+    -- always LFT_CALLTARGET (0). It is runtime tuning metadata with no
+    -- source-level meaning.
+
+    self.FeedbackSlots = {}
+
+    if Deserializer.BytecodeVersion >= 11 then
+        local FeedbackSlotCount = Bytecode:ReadVarInt()
+        self.FeedbackSlots = table.create(FeedbackSlotCount)
+
+        for i = 1, FeedbackSlotCount do
+            self.FeedbackSlots[i] = {
+                Type = Bytecode:readu8(),
+                Pc = Bytecode:ReadVarInt()
+            }
         end
     end
 

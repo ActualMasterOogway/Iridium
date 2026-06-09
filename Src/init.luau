@@ -13,7 +13,7 @@ local Iridium = {
 --[=[
 	@class Deserializer
 
-	The Deserializer class is used for deserializing Luau Bytecode from versions ranging between 3 and 9
+	The Deserializer class is used for deserializing Luau Bytecode from versions ranging between 3 and 11
 ]=]
 local Deserializer = {}
 Deserializer.__type = "Deserializer"
@@ -22,7 +22,7 @@ Deserializer.__index = Deserializer
 --[=[
 	@within Deserializer
 
-	The Deserializer class is used for deserializing Luau Bytecode from versions ranging between 3 and 9
+	The Deserializer class is used for deserializing Luau Bytecode from versions ranging between 3 and 11
 
 	@param Bytecode Buffer.BufferReader
     @param Config DeserializerConfig
@@ -227,6 +227,14 @@ local function SkipProto(Bytecode: Buffer.BufferReader, Version: number)
         elseif Kind == 9 then
             Bytecode:seek(1)
             Bytecode:ReadVarInt64()
+        elseif Kind == 10 then
+            Bytecode:ReadVarInt()
+
+            local Members = Bytecode:ReadVarInt() + Bytecode:ReadVarInt()
+
+            for _ = 1, Members do
+                Bytecode:ReadVarInt()
+            end
         end
     end
 
@@ -252,6 +260,15 @@ local function SkipProto(Bytecode: Buffer.BufferReader, Version: number)
             Bytecode:seek(1)
         end
         for _ = 1, Bytecode:ReadVarInt() do
+            Bytecode:ReadVarInt()
+        end
+    end
+
+    -- Call feedback vector (bytecode v11+): a count followed by one
+    -- (u8 slot type, VarInt pc) pair per slot.
+    if Version >= 11 then
+        for _ = 1, Bytecode:ReadVarInt() do
+            Bytecode:seek(1)
             Bytecode:ReadVarInt()
         end
     end

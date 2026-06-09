@@ -371,13 +371,25 @@ local LuauOpcode = {
     LOP_SETUDATAKS = { Index = 84, Name = "SETUDATAKS", HasAux = true },
     LOP_NAMECALLUDATA = { Index = 85, Name = "NAMECALLUDATA", HasAux = true },
 
+    -- NEWCLASSMEMBER: register a method on a class object (bytecode v10+)
+    -- A: target register holding the class
+    -- B: reserved (always 0)
+    -- C: register holding the member's initial value (currently always a function)
+    -- AUX: constant table index of the member name (a string)
+    LOP_NEWCLASSMEMBER = { Index = 86, Name = "NEWCLASSMEMBER", HasAux = true },
+
+    -- CALLFB: like CALL but collects runtime call-target stats in a feedback slot (bytecode v11+)
+    -- A/B/C: identical to CALL (function register, arg count + 1, result count + 1)
+    -- AUX: feedback slot id (0xFFFFFFFF when sealed)
+    LOP_CALLFB = { Index = 87, Name = "CALLFB", HasAux = true },
+
     -- Enum entry for number of opcodes, not a valid opcode by itself!
-    LOP__COUNT = { Index = 86, Name = "_COUNT", HasAux = false },
+    LOP__COUNT = { Index = 88, Name = "_COUNT", HasAux = false },
 }
 
 local LuauBytecodeTag = {
     LBC_VERSION_MIN = 3,
-    LBC_VERSION_MAX = 9,
+    LBC_VERSION_MAX = 11,
     LBC_VERSION_TARGET = 6,
 
     LBC_TYPE_VERSION_MIN = 1,
@@ -396,6 +408,10 @@ local LuauBytecodeConstants = {
     LBC_CONSTANT_VECTOR = 7,
     LBC_CONSTANT_TABLE_WITH_CONSTANTS = 8,
     LBC_CONSTANT_INTEGER = 9,
+    -- Added in bytecode v10. Appended after INTEGER: a brief pre-release window
+    -- shipped it at tag 9 (shifting INTEGER to 10), but the released layout
+    -- keeps INTEGER at 9 and puts CLASS_SHAPE at 10
+    LBC_CONSTANT_CLASS_SHAPE = 10,
 }
 
 local LuauBytecodeType = {

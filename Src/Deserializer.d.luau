@@ -70,6 +70,14 @@ export type TableWithConstantsConstant = {
     Display: string?
 }
 
+export type ClassShapeConstant = {
+    __type: "ClassShape",
+    ClassName: StringConstant,
+    Properties: { [number]: StringConstant },
+    Methods: { [number]: StringConstant },
+    Display: string?
+}
+
 export type Constant =
     BooleanConstant
     | ClosureConstant
@@ -81,6 +89,7 @@ export type Constant =
     | VectorConstant
     | TableWithConstantsConstant
     | IntegerConstant
+    | ClassShapeConstant
 
 export type Hexadecimal = {
     __type: "Hexadecimal",
@@ -213,6 +222,12 @@ export type Proto = {
     }?,
     DebugUpvalueCount: number?,
     Upvalues: { [number]: Upvalue },
+    FeedbackSlots: {
+        [number]: {
+            Type: number,
+            Pc: number
+        }
+    },
 }
 
 export type DeserializerConfig = {
